@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Simulador de Almacén Inteligente — Picking Routing (UPC)</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --green: #22c55e;
+      --amber: #f59e0b;
+      --red: #ef4444;
+    }
+    * { box-sizing: border-box; font-family: 'Segoe UI', system-ui, sans-serif; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+    }
+    body { display: flex; flex-direction: column; }
+    header {
+      padding: 10px 20px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    header h1 { margin: 0; font-size: 1.05rem; }
+    header span { font-size: 0.82rem; color: var(--accent); }
+
+    .container {
+      display: grid;
+      grid-template-columns: 345px 1fr;
+      gap: 16px;
+      padding: 14px 20px;
+      flex: 1;
+      min-height: 0;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      position: relative;
+    }
+    .sidebar { overflow-y: auto; }
+    .card h2 { margin: 0 0 6px 0; font-size: 0.95rem; color: var(--accent); }
+
+    .capacity-banner {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 7px 10px;
+      font-size: 0.77rem;
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .product-list {
+      flex: 1;
+      min-height: 110px;
+      overflow-y: auto;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px;
+      margin-bottom: 8px;
+      background: #0f172a;
+    }
+    .product-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 4px 0;
+      font-size: 0.79rem;
+      border-bottom: 1px solid rgba(51, 65, 85, 0.35);
+    }
+    .product-item:last-child { border-bottom: none; }
+    .product-item.disabled { opacity: 0.42; }
+    .product-item input { margin-top: 2px; cursor: pointer; }
+    .product-item label { cursor: pointer; line-height: 1.25; }
+
+    .control-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 7px;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+    .control-row input, .control-row select {
+      padding: 5px 7px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: #0f172a;
+      color: var(--text);
+      font-weight: 600;
+      font-size: 0.78rem;
+    }
+    .control-row input[type="number"] { width: 78px; text-align: right; }
+    .control-row select { width: 175px; }
+
+    button {
+      width: 100%;
+      padding: 8px 10px;
+      border: none;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-bottom: 6px;
+      transition: 0.2s;
+      font-size: 0.82rem;
+    }
+    .btn-primary { background: var(--accent); color: #0f172a; }
+    .btn-primary:hover { filter: brightness(1.1); }
+    .btn-secondary { background: #334155; color: var(--text); }
+    .btn-secondary:hover { filter: brightness(1.1); }
+
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+    .tabs { display: flex; gap: 8px; }
+    .tab-btn {
+      width: auto;
+      margin: 0;
+      padding: 6px 12px;
+      background: #0f172a;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      font-size: 0.78rem;
+    }
+    .tab-btn.active {
+      background: var(--accent);
+      color: #0f172a;
+      border-color: var(--accent);
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      margin-bottom: 8px;
+      flex-shrink: 0;
+    }
+    .metric-box {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 7px 8px;
+      text-align: center;
+    }
+    .metric-box .label { font-size: 0.69rem; color: var(--muted); }
+    .metric-box .value { font-size: 0.98rem; font-weight: bold; margin-top: 2px; }
+    .metric-box .sub { font-size: 0.68rem; color: var(--muted); margin-top: 1px; }
+
+    .stage-wrapper {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #0b1120;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px;
+      overflow: hidden;
+      position: relative;
+    }
+    canvas { display: block; border-radius: 4px; }
+
+    #hoverTooltip {
+      position: fixed;
+      pointer-events: none;
+      display: none;
+      background: rgba(15, 23, 42, 0.96);
+      border: 1px solid var(--accent);
+      color: var(--text);
+      padding: 8px 11px;
+      border-radius: 8px;
+      font-size: 0.78rem;
+      line-height: 1.4;
+      z-index: 50;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+      max-width: 270px;
+    }
+
+    .bottom-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-top: 8px;
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+    .legend {
+      display: flex;
+      gap: 14px;
+      font-size: 0.76rem;
+      color: var(--muted);
+      flex-wrap: wrap;
+    }
+    .dot {
+      display: inline-block;
+      width: 11px;
+      height: 11px;
+      border-radius: 3px;
+      margin-right: 5px;
+      vertical-align: middle;
+    }
+    #logBox {
+      font-size: 0.77rem;
+      color: var(--text);
+      background: #0f172a;
+      padding: 7px 9px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      line-height: 1.35;
+      margin-top: 4px;
+    }
+
+    @media (max-width: 960px) {
+      html, body { height: auto; overflow: auto; }
+      .container { grid-template-columns: 1fr; }
+      .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Almacén Inteligente — Simulador de Picking Routing (UFDS + BFS + Dijkstra + A* + TSP)</h1>
+    <span id="graphStats">Cargando grafo...</span>
+  </header>
+
+  <div id="hoverTooltip"></div>
+
+  <div class="container">
+    <div class="card sidebar">
+      <h2>1. Orden de Picking</h2>
+
+      <div class="capacity-banner">
+        <span>Peso: <strong id="weightStatus">0.0 / 12.0 kg</strong></span>
+        <span id="maxSelectableHint" style="color: var(--accent);">Cupo libre: --</span>
+      </div>
+
+      <div class="product-list" id="productList"></div>
+
+      <div class="control-row">
+        <label for="algoMode">Algoritmo a animar:</label>
+        <select id="algoMode">
+          <option value="astar_tsp">A* Manhattan + TSP (Óptimo)</option>
+          <option value="astar">Solo A* Manhattan</option>
+          <option value="dijkstra">Solo Dijkstra</option>
+          <option value="bfs">Solo BFS</option>
+        </select>
+      </div>
+
+      <div class="control-row">
+        <label for="maxWeight">Capacidad máx. por viaje (kg):</label>
+        <input id="maxWeight" type="number" step="0.5" min="1" value="12" onchange="refreshSelectionLimits()" />
+      </div>
+
+      <div class="control-row">
+        <label for="maxItems">Máx. productos por viaje:</label>
+        <input id="maxItems" type="number" step="1" min="1" max="20" value="6" onchange="refreshSelectionLimits()" />
+      </div>
+
+      <div class="control-row">
+        <label for="strictLimit">Bloquear selección al exceder:</label>
+        <input id="strictLimit" type="checkbox" checked onchange="refreshSelectionLimits()" style="width:auto;" />
+      </div>
+
+      <button class="btn-primary" onclick="runSimulation()">▶ Simular Algoritmo Seleccionado</button>
+      <button class="btn-secondary" onclick="selectFittingOrder()">🎲 Seleccionar Máximo Posible</button>
+
+      <div id="logBox">Pasa el cursor sobre un producto o nodo del grafo para ver su nombre y categoría.</div>
+    </div>
+
+    <div class="card">
+      <div class="top-bar">
+        <div class="tabs">
+          <button id="tabMap" class="tab-btn active" onclick="switchView('map')">Mapa del Almacén (Robot)</button>
+          <button id="tabGraph" class="tab-btn" onclick="switchView('graph')">Grafo por Categorías</button>
+        </div>
+        <span style="font-size: 0.75rem; color: var(--muted);">Comparativa individual: BFS vs. Dijkstra vs. Solo A* vs. A* + TSP</span>
+      </div>
+
+      <div class="metrics-grid">
+        <div class="metric-box">
+          <div class="label">Solo BFS (Secuencial)</div>
+          <div class="value" id="bfsDist" style="color: var(--red);">-- m</div>
+          <div class="sub" id="bfsTime">-- s</div>
+        </div>
+        <div class="metric-box">
+          <div class="label">Solo Dijkstra (Sec.)</div>
+          <div class="value" id="dijDist" style="color: #fb923c;">-- m</div>
+          <div class="sub" id="dijTime">-- s</div>
+        </div>
+        <div class="metric-box">
+          <div class="label">Solo A* (Secuencial)</div>
+          <div class="value" id="astarDist" style="color: var(--amber);">-- m</div>
+          <div class="sub" id="astarTime">-- s</div>
+        </div>
+        <div class="metric-box">
+          <div class="label">A* + TSP (Optimizado)</div>
+          <div class="value" id="optDist" style="color: var(--green);">-- m</div>
+          <div class="sub" id="optTime">-- s</div>
+        </div>
+        <div class="metric-box">
+          <div class="label">Ahorro (A*+TSP vs Sec.)</div>
+          <div class="value" id="savingPct" style="color: var(--accent);">-- %</div>
+          <div class="sub" id="tripsCount">Viajes: --</div>
+        </div>
+      </div>
+
+      <div class="stage-wrapper" id="stageWrapper">
+        <canvas id="warehouseCanvas"></canvas>
+      </div>
+
+      <div class="bottom-bar">
+        <div class="legend" id="legendBox"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById("warehouseCanvas");
+    const ctx = canvas.getContext("2d");
+    const stageWrapper = document.getElementById("stageWrapper");
+    const tooltip = document.getElementById("hoverTooltip");
+
+    let warehouseData = null;
+    let productMap = {};
+    let activeView = "map"; // "map" | "graph"
+    let animTimer = null;
+    let hoveredItem = null;
+    let hitTargets = [];
+
+    let currentState = {
+      stops: [],
+      trail: [],
+      robotPos: null,
+      pickedSet: new Set(),
+      nextStopIdx: 0
+    };
+
+    function updateLegend() {
+      const legendBox = document.getElementById("legendBox");
+      if (activeView === "map") {
+        legendBox.innerHTML = `
+          <span><i class="dot" style="background:#334155;"></i>Estantería</span>
+          <span><i class="dot" style="background:#0b1120; border:1px solid #475569;"></i>Pasillo</span>
+          <span><i class="dot" style="background:#f59e0b;"></i>Despacho / Siguiente</span>
+          <span><i class="dot" style="background:#ef4444;"></i>Pendiente</span>
+          <span><i class="dot" style="background:#22c55e;"></i>Recolectado</span>
+          <span><i class="dot" style="background:#38bdf8; border-radius:50%;"></i>Robot AGV</span>
+        `;
+      } else {
+        const cats = (warehouseData && warehouseData.categories) || {};
+        legendBox.innerHTML = Object.entries(cats)
+          .map(([cat, color]) => `<span><i class="dot" style="background:${color}; border-radius:50%;"></i>${cat}</span>`)
+          .join("");
+      }
+    }
+
+    function switchView(view) {
+      activeView = view;
+      document.getElementById("tabMap").classList.toggle("active", view === "map");
+      document.getElementById("tabGraph").classList.toggle("active", view === "graph");
+      tooltip.style.display = "none";
+      updateLegend();
+      resizeCanvasToFit();
+    }
+
+    function getLimits() {
+      const maxWeight = Math.max(0.5, parseFloat(document.getElementById("maxWeight").value) || 12.0);
+      const maxItems = Math.max(1, parseInt(document.getElementById("maxItems").value, 10) || 6);
+      const strict = document.getElementById("strictLimit").checked;
+      return { maxWeight, maxItems, strict };
+    }
+
+    function refreshSelectionLimits() {
+      const { maxWeight, maxItems, strict } = getLimits();
+      const checkboxes = Array.from(document.querySelectorAll("#productList input[type='checkbox']"));
+
+      let currentWeight = 0;
+      let currentCount = 0;
+      checkboxes.forEach(cb => {
+        if (cb.checked) {
+          const p = productMap[cb.value];
+          currentWeight += p ? p.weight_kg : 0;
+          currentCount += 1;
+        }
+      });
+
+      const remainingWeight = Math.max(0, maxWeight - currentWeight);
+      const remainingItems = Math.max(0, maxItems - currentCount);
+
+      document.getElementById("weightStatus").textContent =
+        `${currentWeight.toFixed(1)} / ${maxWeight.toFixed(1)} kg (${currentCount}/${maxItems})`;
+
+      let fittingCount = 0;
+      checkboxes.forEach(cb => {
+        const p = productMap[cb.value];
+        const w = p ? p.weight_kg : 0;
+        const canAddByWeight = (currentWeight + w) <= maxWeight + 1e-9;
+        const canAddByCount = currentCount < maxItems;
+
+        if (!cb.checked && canAddByWeight && canAddByCount) {
+          fittingCount += 1;
+        }
+
+        const shouldDisable = strict && !cb.checked && (!canAddByWeight || !canAddByCount);
+        cb.disabled = shouldDisable;
+        cb.closest(".product-item").classList.toggle("disabled", shouldDisable);
+      });
+
+      document.getElementById("maxSelectableHint").textContent =
+        `Cupo: ${remainingWeight.toFixed(1)} kg · ${remainingItems} prod. (${fittingCount} caben)`;
+    }
+
+    function selectFittingOrder() {
+      const { maxWeight, maxItems } = getLimits();
+      const checkboxes = Array.from(document.querySelectorAll("#productList input[type='checkbox']"));
+      checkboxes.forEach(cb => cb.checked = false);
+
+      let accWeight = 0;
+      let accCount = 0;
+      const shuffled = [...checkboxes].sort(() => Math.random() - 0.5);
+
+      for (const cb of shuffled) {
+        if (accCount >= maxItems) break;
+        const p = productMap[cb.value];
+        const w = p ? p.weight_kg : 0;
+        if (accWeight + w <= maxWeight + 1e-9) {
+          cb.checked = true;
+          accWeight += w;
+          accCount += 1;
+        }
+      }
+      refreshSelectionLimits();
+      runSimulation();
+    }
+
+    function resizeCanvasToFit() {
+      if (!warehouseData) return;
+      const cols = activeView === "map" ? warehouseData.width : 16;
+      const rows = activeView === "map" ? warehouseData.height : 12;
+      const aspectRatio = cols / rows;
+
+      const availW = Math.max(200, stageWrapper.clientWidth - 16);
+      const availH = Math.max(150, stageWrapper.clientHeight - 16);
+
+      let drawW = availW;
+      let drawH = drawW / aspectRatio;
+
+      if (drawH > availH) {
+        drawH = availH;
+        drawW = drawH * aspectRatio;
+      }
+
+      const dpr = window.devicePixelRatio || 1;
+      canvas.style.width = `${Math.floor(drawW)}px`;
+      canvas.style.height = `${Math.floor(drawH)}px`;
+      canvas.width = Math.floor(drawW * dpr);
+      canvas.height = Math.floor(drawH * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      renderCurrentState();
+    }
+
+    async function init() {
+      const res = await fetch("/api/warehouse-info");
+      warehouseData = await res.json();
+      productMap = {};
+      warehouseData.products.forEach(p => { productMap[p.sku] = p; });
+
+      document.getElementById("graphStats").textContent =
+        `Nodos: ${warehouseData.total_nodes} | Componentes UFDS: ${warehouseData.total_components}`;
+
+      const listDiv = document.getElementById("productList");
+      listDiv.innerHTML = "";
+      warehouseData.products.forEach((p, idx) => {
+        const div = document.createElement("div");
+        div.className = "product-item";
+        div.innerHTML = `
+          <input type="checkbox" id="chk_${p.sku}" value="${p.sku}" ${idx < 3 ? "checked" : ""} onchange="refreshSelectionLimits()">
+          <label for="chk_${p.sku}">
+            <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:4px;"></span>
+            <strong>${p.name}</strong> (${p.weight_kg} kg)<br>
+            <span style="color:#94a3b8; font-size:0.72rem;">${p.category} · ${p.sku} · (${p.coord[0]}, ${p.coord[1]})</span>
+          </label>
+        `;
+        listDiv.appendChild(div);
+      });
+
+      updateLegend();
+      refreshSelectionLimits();
+      resizeCanvasToFit();
+    }
+
+    function renderCurrentState() {
+      hitTargets = [];
+      if (activeView === "map") {
+        drawWarehouseMap(
+          currentState.stops,
+          currentState.trail,
+          currentState.robotPos,
+          currentState.pickedSet,
+          currentState.nextStopIdx
+        );
+      } else {
+        drawCooccurrenceGraph();
+      }
+    }
+
+    function drawWarehouseMap(stops, trail, robotPos, pickedSet, nextStopIdx) {
+      const cols = warehouseData.width;
+      const rows = warehouseData.height;
+      const viewW = parseFloat(canvas.style.width) || canvas.width;
+      const viewH = parseFloat(canvas.style.height) || canvas.height;
+      const cw = viewW / cols;
+      const ch = viewH / rows;
+
+      ctx.clearRect(0, 0, viewW, viewH);
+
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          ctx.fillStyle = warehouseData.grid[y][x] === 1 ? "#334155" : "#0b1120";
+          ctx.fillRect(x * cw, y * ch, Math.max(1, cw - 1), Math.max(1, ch - 1));
+        }
+      }
+
+      // Estación de despacho (0,0)
+      ctx.fillStyle = "#f59e0b";
+      ctx.fillRect(0, 0, Math.max(1, cw - 1), Math.max(1, ch - 1));
+
+      // Registrar productos para hover con nombre amigable
+      warehouseData.products.forEach(prod => {
+        const [px, py] = prod.coord;
+        hitTargets.push({
+          cx: (px + 0.5) * cw,
+          cy: (py + 0.5) * ch,
+          radius: Math.max(8, Math.min(cw, ch) * 0.55),
+          info: prod
+        });
+      });
+
+      // Trayectoria recorrida
+      if (trail.length > 1) {
+        ctx.strokeStyle = "rgba(56, 189, 248, 0.8)";
+        ctx.lineWidth = Math.max(2, Math.min(cw, ch) * 0.14);
+        ctx.beginPath();
+        ctx.moveTo((trail[0][0] + 0.5) * cw, (trail[0][1] + 0.5) * ch);
+        for (let i = 1; i < trail.length; i++) {
+          ctx.lineTo((trail[i][0] + 0.5) * cw, (trail[i][1] + 0.5) * ch);
+        }
+        ctx.stroke();
+      }
+
+      // Paradas de la orden activa
+      stops.forEach((st, idx) => {
+        const [sx, sy] = st.shelf_coord;
+        const isPicked = pickedSet.has(idx);
+        const isCurrentTarget = idx === nextStopIdx;
+
+        ctx.fillStyle = isPicked ? "#22c55e" : (isCurrentTarget ? "#f59e0b" : "#ef4444");
+        const pad = Math.max(2, Math.min(cw, ch) * 0.12);
+        ctx.fillRect(sx * cw + pad, sy * ch + pad, Math.max(4, cw - pad * 2), Math.max(4, ch - pad * 2));
+
+        ctx.fillStyle = "#ffffff";
+        ctx.font = `bold ${Math.max(9, Math.floor(Math.min(cw, ch) * 0.45))}px sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(String(idx + 1), (sx + 0.5) * cw, (sy + 0.5) * ch);
+      });
+
+      // Robot móvil
+      if (robotPos) {
+        const [rx, ry] = robotPos;
+        ctx.fillStyle = "#38bdf8";
+        ctx.beginPath();
+        ctx.arc((rx + 0.5) * cw, (ry + 0.5) * ch, Math.max(4, Math.min(cw, ch) * 0.36), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    function drawCooccurrenceGraph() {
+      const viewW = parseFloat(canvas.style.width) || canvas.width;
+      const viewH = parseFloat(canvas.style.height) || canvas.height;
+      ctx.clearRect(0, 0, viewW, viewH);
+
+      const preview = warehouseData.graph_preview || { nodes: [], edges: [] };
+      const posMap = {};
+      const padX = viewW * 0.1;
+      const padY = viewH * 0.12;
+      const usableW = viewW - padX * 2;
+      const usableH = viewH - padY * 2;
+
+      preview.nodes.forEach(n => {
+        posMap[n.sku] = {
+          px: padX + n.x * usableW,
+          py: padY + n.y * usableH
+        };
+      });
+
+      // Aristas de co-ubicación
+      ctx.strokeStyle = "rgba(148, 163, 184, 0.38)";
+      ctx.lineWidth = 1.3;
+      preview.edges.forEach(e => {
+        const a = posMap[e.source];
+        const b = posMap[e.target];
+        if (a && b) {
+          ctx.beginPath();
+          ctx.moveTo(a.px, a.py);
+          ctx.lineTo(b.px, b.py);
+          ctx.stroke();
+        }
+      });
+
+      // Nodos coloreados por categoría
+      preview.nodes.forEach(n => {
+        const { px, py } = posMap[n.sku];
+        const isHovered = hoveredItem && hoveredItem.sku === n.sku;
+        const r = isHovered ? 12 : 9;
+
+        ctx.fillStyle = n.color || "#38bdf8";
+        ctx.beginPath();
+        ctx.arc(px, py, r, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (isHovered) {
+          ctx.strokeStyle = "#ffffff";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+
+        ctx.fillStyle = "#e2e8f0";
+        ctx.font = "11px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(n.name.split(" ")[0], px, py - r - 5);
+
+        hitTargets.push({ cx: px, cy: py, radius: r + 4, info: n });
+      });
+    }
+
+    canvas.addEventListener("mousemove", (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+
+      let found = null;
+      for (const target of hitTargets) {
+        const dist = Math.hypot(mx - target.cx, my - target.cy);
+        if (dist <= target.radius) {
+          found = target.info;
+          break;
+        }
+      }
+
+      hoveredItem = found;
+      if (activeView === "graph") {
+        drawCooccurrenceGraph();
+      }
+
+      if (found) {
+        const degLine = found.degree !== undefined
+          ? `<br><span style="color:#94a3b8;">Conexiones (grado):</span> ${found.degree}`
+          : "";
+        tooltip.innerHTML = `
+          <div style="color:${found.color || '#38bdf8'}; font-weight:700; margin-bottom:2px;">${found.name}</div>
+          <span style="color:#94a3b8;">Categoría:</span> ${found.category}<br>
+          <span style="color:#94a3b8;">Código:</span> ${found.sku}<br>
+          <span style="color:#94a3b8;">Peso:</span> ${found.weight_kg} kg<br>
+          <span style="color:#94a3b8;">Ubicación:</span> (${found.coord[0]}, ${found.coord[1]})${degLine}
+        `;
+        tooltip.style.display = "block";
+        tooltip.style.left = `${e.clientX + 14}px`;
+        tooltip.style.top = `${e.clientY + 14}px`;
+      } else {
+        tooltip.style.display = "none";
+      }
+    });
+
+    canvas.addEventListener("mouseleave", () => {
+      hoveredItem = null;
+      tooltip.style.display = "none";
+      if (activeView === "graph") drawCooccurrenceGraph();
+    });
+
+    async function runSimulation() {
+      if (animTimer) clearInterval(animTimer);
+      const selected = Array.from(
+        document.querySelectorAll("#productList input[type='checkbox']:checked")
+      ).map(cb => cb.value);
+
+      if (selected.length === 0) {
+        alert("Selecciona al menos un producto.");
+        return;
+      }
+
+      const { maxWeight } = getLimits();
+      const mode = document.getElementById("algoMode").value;
+
+      const res = await fetch("/api/simulate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ skus: selected, max_weight_kg: maxWeight })
+      });
+      const data = await res.json();
+      const rBfs = data.routes.bfs;
+      const rDij = data.routes.dijkstra;
+      const rAst = data.routes.astar;
+      const rOpt = data.routes.astar_tsp;
+
+      document.getElementById("bfsDist").textContent = `${rBfs.distance_m} m`;
+      document.getElementById("bfsTime").textContent = `${rBfs.time_s} s (${rBfs.exec_ms} ms)`;
+
+      document.getElementById("dijDist").textContent = `${rDij.distance_m} m`;
+      document.getElementById("dijTime").textContent = `${rDij.time_s} s (${rDij.exec_ms} ms)`;
+
+      document.getElementById("astarDist").textContent = `${rAst.distance_m} m`;
+      document.getElementById("astarTime").textContent = `${rAst.time_s} s (${rAst.exec_ms} ms)`;
+
+      document.getElementById("optDist").textContent = `${rOpt.distance_m} m`;
+      document.getElementById("optTime").textContent = `${rOpt.time_s} s (${rOpt.exec_ms} ms)`;
+
+      document.getElementById("savingPct").textContent = `${data.metrics.saving_percent} %`;
+      document.getElementById("tripsCount").textContent = `Viajes: ${rOpt.trips_count}`;
+
+      const chosen = data.routes[mode] || rOpt;
+      const path = chosen.path;
+      const stops = chosen.ordered_stops;
+      const pickedSet = new Set();
+      let nextStopIdx = 0;
+      let step = 0;
+
+      if (activeView !== "map") {
+        switchView("map");
+      }
+
+      currentState = { stops, trail: [], robotPos: null, pickedSet, nextStopIdx };
+
+      document.getElementById("logBox").textContent =
+        `Animando [${chosen.label}] · Distancia: ${chosen.distance_m} m · Tiempo: ${chosen.time_s} s`;
+
+      animTimer = setInterval(() => {
+        if (step >= path.length) {
+          clearInterval(animTimer);
+          const diffM = (rAst.distance_m - rOpt.distance_m).toFixed(1);
+          document.getElementById("logBox").textContent =
+            `✅ [${chosen.label}] finalizado (${chosen.distance_m} m). Mejora A*+TSP vs Secuencial: ${data.metrics.saving_percent}% (${diffM} m menos).`;
+          return;
+        }
+
+        const curr = path[step];
+
+        while (nextStopIdx < stops.length) {
+          const target = stops[nextStopIdx];
+          if (target.aisle_coord[0] === curr[0] && target.aisle_coord[1] === curr[1]) {
+            pickedSet.add(nextStopIdx);
+            document.getElementById("logBox").textContent =
+              `📦 [Viaje #${target.trip}] Parada #${nextStopIdx + 1}: ${target.name} (${target.weight_kg} kg)`;
+            nextStopIdx++;
+          } else {
+            break;
+          }
+        }
+
+        if (curr[0] === 0 && curr[1] === 0 && step > 0 && nextStopIdx < stops.length) {
+          document.getElementById("logBox").textContent =
+            `🔄 Descargando en Despacho (0,0) e iniciando Viaje #${stops[nextStopIdx].trip}...`;
+        }
+
+        currentState = {
+          stops,
+          trail: path.slice(0, step + 1),
+          robotPos: curr,
+          pickedSet,
+          nextStopIdx
+        };
+        renderCurrentState();
+        step++;
+      }, 85);
+    }
+
+    window.addEventListener("resize", resizeCanvasToFit);
+    init();
+  </script>
+</body>
+</html>
